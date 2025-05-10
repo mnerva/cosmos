@@ -1,5 +1,5 @@
-version: "3.9"
 services:
+  # PostgreSQL database service
   db:
     image: postgres
     restart: always
@@ -12,21 +12,31 @@ services:
     ports:
       - "5432:5432"
 
-  backend:
+  server:
     build: ./server
     ports:
       - "4000:3000"
     depends_on:
       - db
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     env_file:
       - .env
+    volumes:
+      - ./server:/app
+    command: npm run start:dev
 
-  frontend:
+  client:
     build: ./client
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      - server
+    volumes:
+      - ./client:/app
+    command: npm run dev
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
     env_file:
       - .env
 
