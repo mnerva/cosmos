@@ -40,27 +40,29 @@ export default function Offers() {
     const destination = document.getElementById("destination").value;
     const company = document.getElementById("company").value;
 
-    console.log('departure:', departure, 'destination:', destination, 'company:', company);
-
     // Filter logic
-    let filtered = legs.filter((leg) => {
-      const providerCompanies = leg.providers.map((p) => p.company.name.trim().toLowerCase());
-      console.log('Provider companies for this leg:', providerCompanies);
+    let filtered = legs.map((leg) => {
+      let filteredProviders = leg.providers;
+      if (company) {
+        filteredProviders = leg.providers.filter(
+          (p) => p.company.name.trim().toLowerCase() === company.trim().toLowerCase()
+        );
+      }
 
-      const matchesCompany =
-        !company || providerCompanies.includes(company.trim().toLowerCase());
-
+      // Filter by Departure and Destination
       const matchesDeparture =
         !departure || leg.routeInfo.from.name.toLowerCase().includes(departure.toLowerCase());
 
       const matchesDestination =
         !destination || leg.routeInfo.to.name.toLowerCase().includes(destination.toLowerCase());
 
-      console.log('matchesDeparture:', matchesDeparture);
-      console.log('matchesDestination:', matchesDestination);
-
-      return matchesDeparture && matchesDestination && matchesCompany;
-    });
+      // Only return legs that match and have at least one provider
+      if (matchesDeparture && matchesDestination && filteredProviders.length > 0) {
+        return { ...leg, providers: filteredProviders };
+      }
+      return null;
+    })
+    .filter(Boolean); // Remove nulls
 
     // Sort the filtered legs
     if (sortCriteria === 'price') {
@@ -76,9 +78,7 @@ export default function Offers() {
       });
     }
 
-    console.log('filtered:', filtered);
     setFilteredLegs(filtered); // Update what is displayed
-    console.log('filteredLegs:', filteredLegs);
   };
 
   // Set sort criteria and trigger filtering/sorting
@@ -147,23 +147,24 @@ export default function Offers() {
                 <div key={leg.id} className="space-y-4">
                   <div>
                     <p className="text-lg font-semibold">
-                      {leg.routeInfo.from.name.toLowerCase()} - {leg.routeInfo.to.name.toLowerCase()}
+                      {leg?.routeInfo?.from?.name?.toLowerCase() ?? 'unknown'} - {leg?.routeInfo?.to?.name?.toLowerCase() ?? 'unknown'}
                     </p>
                   </div>
                   <div className="space-y-4">
-                    {leg.providers.map((provider) => (
-                      <div
-                        key={provider.id}
-                        className="bg-zinc-800 text-white p-4 rounded-md border border-white flex items-center justify-between"
-                      >
-                        <p className="capitalize">{provider.company.name.toLowerCase()}</p>
-                        <p>{formatDate(provider.flightStart)}</p>
-                        <p>${provider.price.toFixed(2)}</p>
-                        <button className="border border-white px-4 py-1 rounded hover:bg-white hover:text-black">
-                          select
-                        </button>
-                      </div>
-                    ))}
+                    {Array.isArray(leg?.providers) &&
+                      leg.providers.map((provider, index) => (
+                        <div
+                          key={`${leg.id}-${provider.id}`}
+                          className="bg-zinc-800 text-white p-4 rounded-md border border-white flex items-center justify-between"
+                        >
+                          <p className="capitalize">{provider?.company?.name?.toLowerCase() ?? 'unknown'}</p>
+                          <p>{formatDate(provider?.flightStart)}</p>
+                          <p>${provider?.price?.toFixed(2) ?? '0.00'}</p>
+                          <button className="border border-white px-4 py-1 rounded hover:bg-white hover:text-black">
+                            select
+                          </button>
+                        </div>
+                      ))}
                   </div>
                 </div>
               ))}
