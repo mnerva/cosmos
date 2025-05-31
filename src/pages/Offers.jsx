@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { fetchOffers } from '../utils/api';
+import { useMemo } from 'react';
 
 // Function to format duration from a date string
 function formatDate(dateString) {
@@ -15,7 +16,11 @@ function formatDate(dateString) {
 export default function Offers() {
   const [legs, setLegs] = useState([])
   const [filteredLegs, setFilteredLegs] = useState([]);
+  const [companyLegs, setCompanyLegs] = useState([]);
   const [sortCriteria, setSortCriteria] = useState('');
+  const [noResultsMessage, setNoResultsMessage] = useState("");
+  const [sortOrder, setSortOrder] = useState('asc');
+
 
   // Fetch data on initial load
   useEffect(() => {
@@ -24,69 +29,119 @@ export default function Offers() {
 
       const legsData = Array.isArray(data?.legs) ? data.legs : [];
       setLegs(legsData)
-      setFilteredLegs(legsData)
     }
     getData()
   }, [])
 
   // Extract unique company names for the dropdown filter
+  // Used for the company filter dropdown
   const companyNames = Array.from(
     new Set(legs.flatMap((leg) => leg.providers.map((p) => p.company.name)))
   )
 
-  // Handles filtering and sorting the legs
-  const handleFilterAndSort = () => {
+  const activeLegs = useMemo(() => {
+    return companyLegs.length > 0 ? companyLegs : filteredLegs;
+  }, [companyLegs, filteredLegs]);
+
+  // Handle filtering
+  const handleRouteFilter = () => {
     const departure = document.getElementById("departure").value;
     const destination = document.getElementById("destination").value;
-    const company = document.getElementById("company").value;
-
-    console.log('departure:', departure, 'destination:', destination, 'company:', company);
-
-    // Filter logic
+    
     let filtered = legs.filter((leg) => {
-      const providerCompanies = leg.providers.map((p) => p.company.name.trim().toLowerCase());
-      console.log('Provider companies for this leg:', providerCompanies);
-
-      const matchesCompany =
-        !company || providerCompanies.includes(company.trim().toLowerCase());
-
+      let filteredProviders = leg.providers;
       const matchesDeparture =
         !departure || leg.routeInfo.from.name.toLowerCase().includes(departure.toLowerCase());
 
       const matchesDestination =
         !destination || leg.routeInfo.to.name.toLowerCase().includes(destination.toLowerCase());
+      
+      // Only return legs that match and have at least one provider
+      if (matchesDeparture && matchesDestination) {
+        return { ...leg };
+      }
+      return null;
+    }).filter(Boolean); // Remove nulls
+    setFilteredLegs(filtered);
+  }
 
-      console.log('matchesDeparture:', matchesDeparture);
-      console.log('matchesDestination:', matchesDestination);
+  const handleCompanyFilter = () => {
+    const company = document.getElementById("company").value;
 
-      return matchesDeparture && matchesDestination && matchesCompany;
-    });
+    // Filter logic
+    let filtered = filteredLegs.map((leg) => {
+      let filteredProviders = leg.providers;
+      if (company) {
+        filteredProviders = leg.providers.filter(
+          (p) => p.company.name.trim().toLowerCase() === company.trim().toLowerCase()
+        );
+      }
+      // Only return legs that match and have at least one provider
+      if (filteredProviders.length > 0) {
+        return { ...leg, providers: filteredProviders };
+      }
+      return null;
+    }).filter(Boolean); // Remove nulls
+    setCompanyLegs(filtered);
 
-    // Sort the filtered legs
-    if (sortCriteria === 'price') {
-      filtered.sort((a, b) => a.providers[0].price - b.providers[0].price);
-    } else if (sortCriteria === 'distance') {
-      filtered.sort((a, b) => a.routeInfo.distance - b.routeInfo.distance);
-    } else if (sortCriteria === 'time') {
-      filtered.sort((a, b) => {
-        const timeA = new Date(a.providers[0].flightEnd).getTime() - new Date(a.providers[0].flightStart).getTime();
-        const timeB = new Date(b.providers[0].flightEnd).getTime() - new Date(b.providers[0].flightStart).getTime();
-        console.log('timeA:', timeA, 'timeB:', timeB);
-        return timeA - timeB;
-      });
+    if (company && filtered.length === 0) {
+      setCompanyLegs([]);
+      setNoResultsMessage("No flights from the selected company. Here are some other options:");
+    } else {
+      setNoResultsMessage(""); // Clear message if results found or no filter
+    }
+  }
+
+  const handleSort = (criteria) => {
+    let newOrder = 'asc';
+    
+    if (criteria === sortCriteria) {
+      newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
     }
 
-    console.log('filtered:', filtered);
-    setFilteredLegs(filtered); // Update what is displayed
-    console.log('filteredLegs:', filteredLegs);
-  };
-
-  // Set sort criteria and trigger filtering/sorting
-  const handleSort = (criteria) => {
     setSortCriteria(criteria);
-    console.log('sortCriteria:', criteria);
-    handleFilterAndSort();
-  };
+    setSortOrder(newOrder);
+
+    const legsToSort = companyLegs.length > 0 ? companyLegs : filteredLegs;
+
+    const sortedLegs = legsToSort.map(leg => {
+      const sortedProviders = [...leg.providers].sort((a, b) => {
+        let comparison = 0;
+
+        if (criteria === 'price') {
+          comparison = a.price - b.price;
+        } else if (criteria === 'time') {
+          const durationA = new Date(a.flightEnd) - new Date(a.flightStart);
+          const durationB = new Date(b.flightEnd) - new Date(b.flightStart);
+          comparison = durationA - durationB;
+        }
+
+        // Reverse if order is descending
+        return newOrder === 'asc' ? comparison : -comparison;
+      });
+
+      return {
+        ...leg,
+        providers: sortedProviders,
+      };
+    });
+
+      // Apply result to the appropriate array
+      if (companyLegs.length > 0) {
+        setCompanyLegs(sortedLegs);
+      } else {
+        setFilteredLegs(sortedLegs);
+      }
+  }
+
+  function formatDuration(start, end) {
+    const durationMs = new Date(end) - new Date(start);
+    const minutes = Math.floor(durationMs / 60000);
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}h ${remainingMinutes}min`;
+  }
+
   return (
     <div
       className="min-h-screen p-10 w-full bg-cover bg-center bg-no-repeat overflow-y-auto"
@@ -105,7 +160,7 @@ export default function Offers() {
             </div>
             <div className="mt-6 text-center">
               <button
-                onClick={handleFilterAndSort}
+                onClick={handleRouteFilter}
                 className="bg-zinc-800 text-white px-6 py-3 border border-zinc-700 rounded hover:bg-zinc-700">
                 find routes
               </button>
@@ -117,7 +172,7 @@ export default function Offers() {
               <p className="block pb-2">filter by:</p>
               <div className="flex items-center space-x-2">
                 <span className="text-xl">company:</span>
-                <select id="company" onChange={handleFilterAndSort} className="bg-zinc-800 text-white px-4 py-2 border border-zinc-700 rounded focus:outline-none w-full">
+                <select id="company" onChange={handleCompanyFilter} className="bg-zinc-800 text-white px-4 py-2 border border-zinc-700 rounded focus:outline-none w-full">
                   <option value="">Select</option>
                   {companyNames.map((company) => (
                     <option key={company} value={company.trim()}>
@@ -132,7 +187,6 @@ export default function Offers() {
               <p className="block pb-2">sort by:</p>
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => handleSort('price')} className="bg-zinc-800 text-white px-4 py-2 border border-zinc-700 rounded">price</button>
-                <button onClick={() => handleSort('distance')} className="bg-zinc-800 text-white px-4 py-2 border border-zinc-700 rounded">distance</button>
                 <button onClick={() => handleSort('time')} className="bg-zinc-800 text-white px-4 py-2 border border-zinc-700 rounded">travel time</button>
               </div>
             </div>
@@ -141,29 +195,35 @@ export default function Offers() {
 
         <div>
           <p className='flex justify-left pt-8 text-2xl'>Hot deals</p>
-          {filteredLegs.length > 0 ? (
+
+          {noResultsMessage && (
+            <p className="text-xl">{noResultsMessage}</p>
+          )}
+
+          {activeLegs.length > 0 ? (
             <div className="space-y-6">
-              {filteredLegs.map((leg) => (
+              {activeLegs.map((leg) => (
                 <div key={leg.id} className="space-y-4">
                   <div>
                     <p className="text-lg font-semibold">
-                      {leg.routeInfo.from.name.toLowerCase()} - {leg.routeInfo.to.name.toLowerCase()}
+                      {leg?.routeInfo?.from?.name?.toLowerCase() ?? 'unknown'} - {leg?.routeInfo?.to?.name?.toLowerCase() ?? 'unknown'}
                     </p>
                   </div>
                   <div className="space-y-4">
-                    {leg.providers.map((provider) => (
-                      <div
-                        key={provider.id}
-                        className="bg-zinc-800 text-white p-4 rounded-md border border-white flex items-center justify-between"
-                      >
-                        <p className="capitalize">{provider.company.name.toLowerCase()}</p>
-                        <p>{formatDate(provider.flightStart)}</p>
-                        <p>${provider.price.toFixed(2)}</p>
-                        <button className="border border-white px-4 py-1 rounded hover:bg-white hover:text-black">
-                          select
-                        </button>
-                      </div>
-                    ))}
+                    {Array.isArray(leg?.providers) &&
+                      leg.providers.map((provider, index) => (
+                        <div
+                          key={`${leg.id}-${provider.id}`}
+                          className="bg-zinc-800 text-white p-4 rounded-md border border-white flex items-center justify-between"
+                        >
+                          <p className="capitalize">{provider?.company?.name?.toLowerCase() ?? 'unknown'}</p>
+                          <p>{formatDuration(provider?.flightStart, provider?.flightEnd)}</p>
+                          <p>${provider?.price?.toFixed(2) ?? '0.00'}</p>
+                          <button className="border border-white px-4 py-1 rounded hover:bg-white hover:text-black">
+                            select
+                          </button>
+                        </div>
+                      ))}
                   </div>
                 </div>
               ))}
