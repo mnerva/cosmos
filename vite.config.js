@@ -13,10 +13,14 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       proxy: {
-        '/api': {
+        '/external-api': {
           target: 'https://cosmosodyssey.azurewebsites.net',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, '/api/v1.0'),
+          rewrite: (path) => path.replace(/^\/external-api/, '/api/v1.0'),
+        },
+        '/api': {
+          target: 'http://localhost:5050',
+          changeOrigin: true,
         },
       },
     },
