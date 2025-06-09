@@ -78,8 +78,9 @@ export async function insertFlightData() {
     DELETE FROM pricelists
     WHERE id NOT IN (
       SELECT id FROM (
-        SELECT id FROM pricelists
-        ORDER BY valid_until DESC
+        SELECT id
+        FROM pricelists
+        ORDER BY valid_until DESC, id DESC
         LIMIT 15
       ) AS newest
     )
