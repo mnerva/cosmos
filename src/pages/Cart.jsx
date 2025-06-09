@@ -1,9 +1,12 @@
 import { useCart } from "../components/CartContext";
 import { useNavigate } from "react-router-dom";
+import { useState } from 'react';
 
 export default function Cart() {
   const { cart, clearCart } = useCart();
   const navigate = useNavigate();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
 
   if (cart.length === 0)
     return (
@@ -42,6 +45,47 @@ export default function Cart() {
     return `${hours}h ${remainingMinutes}min`;
   }
 
+  const handlePurchase = async (e) => {
+    e?.preventDefault?.();
+
+    if (!firstName || !lastName) {
+      alert("Please fill in your first and last name.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          reservations: cart.map((item) => ({
+            offerId: item.id,
+            companyName: item.company?.name ?? "",
+            from: item.routeInfo?.from?.name ?? "",
+            to: item.routeInfo?.to?.name ?? "",
+            flightStart: item.flightStart,
+            flightEnd: item.flightEnd,
+            price: item.price,
+          })),
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to make reservation");
+
+      const data = await response.json();
+      const reservationCode = data.code;
+
+      clearCart();  // Clear all items
+      navigate("/confirmation", { state: { reservationCode } });
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong. Please try again.");
+    }
+  };
+
+
   return (
     <div
       className="min-h-screen p-10 w-full bg-cover bg-center bg-no-repeat overflow-y-auto"
@@ -54,14 +98,15 @@ export default function Cart() {
           <div className='space-y-6 justify-items-end max-w-4xl'>
             <div className="flex items-center space-x-4">
               <label className="flex-none text-2xl mb-1" htmlFor="firstName">first name:</label>
-              <input id="firstName" type="text" className="flex-grow max-w-lg text-white px-2 py-1 border border-zinc-400 rounded focus:outline-none" />
+              <input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="flex-grow max-w-lg text-white px-2 py-1 border border-zinc-400 rounded focus:outline-none" />
             </div>
             <div className="flex items-center space-x-4">
               <label className="flex-none text-2xl mb-1" htmlFor="lastName">last name:</label>
-              <input id="lastName" type="text" className="flex-grow max-w-lg text-white px-2 py-1 border border-zinc-400 rounded focus:outline-none" />
+              <input id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}className="flex-grow max-w-lg text-white px-2 py-1 border border-zinc-400 rounded focus:outline-none" />
             </div>
             <div className="mt-6 text-center">
               <button
+                onClick={handlePurchase}
                 className="text-white px-6 py-3 border border-zinc-400 rounded hover:bg-zinc-500">
                 purchase
               </button>
@@ -97,7 +142,7 @@ export default function Cart() {
               </div>
             </div>
           ))}
-            <button onClick={() => navigate("/offers")} className="flex justify-left p-0.5 px-3 mt-5 border rounded-md hover:bg-zinc-700">Back to Deals</button>
+            <button onClick={() => navigate("/offers", {state: { reservationCode: "sd"}})} className="flex justify-left p-0.5 px-3 mt-5 border rounded-md hover:bg-zinc-700">Back to Deals</button>
           </div>
         </div>
       </div>

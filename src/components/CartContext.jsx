@@ -9,9 +9,13 @@ export const CartProvider = ({ children }) => {
     setCart((prev) => [...prev, item]);
   };
 
-  const clearCart = (itemId) => {
-    setCart((prev) => prev.filter(item => item.id !== itemId));
-  };
+  function clearCart(itemId) {
+    if (itemId === undefined) {
+      setCart([]); // Clear all
+    } else {
+      setCart((prev) => prev.filter((item) => item.id !== itemId));
+    }
+  }
 
   return (
     <CartContext.Provider value={{ cart, addToCart, clearCart }}>
